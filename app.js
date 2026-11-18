@@ -683,7 +683,13 @@
         },
         function (e) {
           setLive("");
-          showBanner("转写失败：" + friendlyError(e));
+          var who = cfg.provider || "groq";
+          var msg = friendlyError(e);
+          if (/401|403/.test(msg)) {
+            msg += " 确认「语音识别服务商」是 " + who +
+              "，并且 Key 填的是同一家的。";
+          }
+          showBanner("转写失败（" + who + "）：" + msg);
         }
       );
     });
@@ -888,19 +894,43 @@
     })(cid, CHECKS[cid]);
   }
 
-  // 填了语音识别 Key 就自动切到服务器端，省得手动忘记切
+  // 填了语音识别 Key 就自动切到服务器端，并根据 Key 的格式猜服务商
   (function () {
     var node = $("fAsrKey");
     if (!node) return;
-    node.addEventListener("change", function () {
-      if (node.value.trim() && S.asrMode !== "server") {
+
+    function guessProvider(key) {
+      var k = (key || "").trim();
+      if (!k) return null;
+      if (/^gsk_/i.test(k)) return "groq";
+      if (/^[0-9a-f]{32,40}$/i.test(k)) return "deepgram"; // Deepgram 是纯十六进制
+      if (/^sk-/.test(k)) return "openai";
+      return null;
+    }
+
+    function onKey() {
+      var key = node.value.trim();
+      if (!key) return;
+
+      var guess = guessProvider(key);
+      if (guess && guess !== S.asrProvider) {
+        S.asrProvider = guess;
+        saveSettings();
+        var sel = $("fAsrProvider");
+        if (sel) sel.value = guess;
+        toast("已识别服务商：" + guess);
+      }
+
+      if (S.asrMode !== "server") {
         S.asrMode = "server";
         saveSettings();
-        var sel = $("fAsrMode");
-        if (sel) sel.value = "server";
-        toast("已切换为服务器端识别");
+        var modeSel = $("fAsrMode");
+        if (modeSel) modeSel.value = "server";
       }
-    });
+    }
+
+    node.addEventListener("change", onKey);
+    node.addEventListener("input", onKey);
   })();
 
   document.querySelectorAll("[data-close]").forEach(function (n) {
