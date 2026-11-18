@@ -1,5 +1,5 @@
-/* 离线壳缓存：教室 Wi-Fi 烂的时候至少能把界面打开 */
-const CACHE = "klassenhelfer-v3";
+﻿/* 绂荤嚎澹崇紦瀛橈細鏁欏 Wi-Fi 鐑傜殑鏃跺€欒嚦灏戣兘鎶婄晫闈㈡墦寮€ */
+const CACHE = "klassenhelfer-v4";
 const SHELL = ["./", "./index.html", "./app.js", "./logic.js", "./asr.js", "./styles.css", "./manifest.webmanifest"];
 
 self.addEventListener("install", (ev) => {
@@ -22,13 +22,12 @@ self.addEventListener("fetch", (ev) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // 模型接口永远走网络，不缓存
-  if (url.origin !== self.location.origin) return;
+  // 妯″瀷鎺ュ彛姘歌繙璧扮綉缁滐紝涓嶇紦瀛?  if (url.origin !== self.location.origin) return;
 
   ev.respondWith(
     caches.match(req).then((hit) => {
       if (hit) {
-        // 后台顺手更新
+        // 鍚庡彴椤烘墜鏇存柊
         fetch(req)
           .then((res) => {
             if (res && res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
@@ -48,3 +47,4 @@ self.addEventListener("fetch", (ev) => {
     })
   );
 });
+
