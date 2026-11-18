@@ -217,6 +217,27 @@
     return v === "yes" || v === "ja" || v === "true" || v === "1" || v.indexOf("yes") === 0;
   }
 
+  /**
+   * 清洗德语答案，保证是「能直接念」的纯德文：
+   * 模型偶尔会混进括号注释、中文、markdown 记号，这些念出来都会卡。
+   */
+  function sanitizeGermanAnswer(text) {
+    var s = String(text == null ? "" : text);
+
+    // 去掉 markdown 记号
+    s = s.replace(/[\*_`#>~]/g, "");
+    // 去掉括号里的中文注释，例如 "（即资产）"
+    s = s.replace(/[（(][^）)]*[\u4e00-\u9fff][^）)]*[）)]/g, "");
+    // 去掉任何残留的中日韩字符
+    s = s.replace(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g, "");
+    // 中文标点换成德语习惯
+    s = s.replace(/[，、]/g, ",").replace(/。/g, ".");
+    // 归一化空白，去掉中文标点前后多余空格
+    s = s.replace(/\s+/g, " ").replace(/\s+([,.!?;:])/g, "$1").trim();
+
+    return s;
+  }
+
   /* ------------------------------------------------------------------ */
   /* 2.5 语音活动检测（把连续录音切成一句一句）                          */
   /* ------------------------------------------------------------------ */
@@ -310,15 +331,18 @@
     "2. 判断：这是不是老师在向学生提问、点名、或要求有人开口回答？课堂上的自问自答、纯讲授、念幻灯片都不算。",
     "3. 如果算提问：写一段他可以照着念出来的德语回答。",
     "",
-    "德语回答的硬性要求：",
-    "- 像学生自己说的话：口语、简洁，2~3 句，最多 60 个德语词。",
-    "- 直接给内容，不要写「Das ist eine gute Frage」这类开场废话。",
-    "- 不分点、不用 markdown、不用论文书面腔。",
-    "- 必须用上老师问到的德语专业术语。",
-    "- 德语必须语法正确：主语和动词的数要一致。Aktiva / Passiva / Kosten / Umsätze 这类是复数，动词用 zeigen 不是 zeigt；die Bilanz 单数是 zeigt。名词性、格、冠词也要对。",
-    "- 输出前在心里默读一遍做语法检查，宁可句子短一点，也不要出现一眼能看出的语法错。",
-    "- 信息不足时给一个稳妥且正确的框架式回答（如「Ich würde sagen, dass …, weil …」或「Wenn ich es richtig verstanden habe, geht es um …」），绝对不要瞎编年份、人名、数字、文献。",
-    "- 如果老师是在点名让他回答，回答用「Ich」开头。",
+    "德语回答的硬性要求 —— 这段是他要当着老师的面直接念出来的，必须「一口气能读完」：",
+    "1. 最多 3 句，每句不超过 15 个德语词。宁可少说，不要长句。",
+    "2. 只用简单句。从句最多一个，而且只允许 weil / dass / wenn 开头。",
+    "3. 不要括号、斜杠、引号、破折号、冒号、分号 —— 这些念出来会卡住。",
+    "4. 不要出现中文、英文单词、markdown 符号、表情。",
+    "5. 不要「wie gesagt」「also ich denke mal」这类口头填充。",
+    "6. 专业术语可以用，但一句话里最多两个；术语本身要保留德语原词。",
+    "7. 像学生自己说的话，不要书面论文腔，不要「Das ist eine gute Frage」这种开场废话。",
+    "8. 德语必须语法正确：主谓一致、格和冠词都要对。Aktiva / Passiva / Kosten 这类是复数用 zeigen，die Bilanz 单数用 zeigt。",
+    "9. 输出前在心里默读一遍做语法检查，宁可句子短一点，也不要出现一眼能看出的错。",
+    "10. 信息不足时用「Ich würde sagen, dass …」或「Wenn ich es richtig verstanden habe, …」这种稳妥句式，绝对不要瞎编年份、人名、数字、文献。",
+    "11. 如果老师是在点名让他回答，回答用「Ich」开头。",
     "",
     "输出格式（严格）：四个标记各自独占一行，顺序固定，不要加别的标记，不要代码块围栏，不要任何解释。",
     "",
@@ -370,6 +394,7 @@
     createParser: createParser,
     createVad: createVad,
     isQuestionAnswer: isQuestionAnswer,
+    sanitizeGermanAnswer: sanitizeGermanAnswer,
     buildMessages: buildMessages
   };
 });
