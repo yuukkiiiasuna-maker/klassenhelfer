@@ -1,5 +1,5 @@
 /* 离线壳缓存：教室 Wi-Fi 烂的时候至少能把界面打开 */
-const CACHE = "klassenhelfer-v1";
+const CACHE = "klassenhelfer-v2";
 const SHELL = ["./", "./index.html", "./app.js", "./logic.js", "./styles.css", "./manifest.webmanifest"];
 
 self.addEventListener("install", (ev) => {
