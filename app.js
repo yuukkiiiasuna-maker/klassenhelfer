@@ -23,7 +23,12 @@
     autoAnswer: true,
     vibrate: true,
     tts: false,
-    discreet: false
+    discreet: false,
+    asrMode: "browser",
+    asrProvider: "groq",
+    asrKey: "",
+    asrBaseUrl: "",
+    asrModel: ""
   };
 
   /* ---------------- 设置读写 ---------------- */
@@ -420,6 +425,7 @@
 
   var rec = null;
   var running = false;
+  var activeMode = null;
   var restartTimer = null;
   var wakeLock = null;
   var errorStreak = 0;
@@ -535,54 +541,272 @@
 
   function startListening() {
     if (running) return;
-    if (!getSR()) {
-      toast("这个浏览器不支持语音识别，请用 Chrome");
-      return;
-    }
     if (!S.apiKey) {
       toast("先去设置里填 API Key");
       openSheet();
       return;
     }
+    if (S.asrMode === "server") startServerMode();
+    else startBrowserMode();
+  }
 
-    running = true;
-    errorStreak = 0;
-    rec = buildRecognition();
-    try {
-      rec.start();
-    } catch (e) {
-      running = false;
-      setDot("err");
-      toast("启动识别失败：" + (e.message || e));
-      return;
-    }
-
+  function markRunning() {
     btnMic.textContent = "停止";
     btnMic.classList.add("on");
     liveEl.style.display = "";
     liveEl.classList.remove("idle");
     setLive("");
     acquireWakeLock();
+  }
+
+  function unmarkRunning() {
+    btnMic.textContent = "开始听";
+    btnMic.classList.remove("on");
+    setDot("");
+    setLive("");
+    liveEl.style.display = "none";
+    if (wakeLock) {
+      try { wakeLock.release(); } catch (e) {}
+      wakeLock = null;
+    }
+  }
+
+  /* ---------------- 方式 A：浏览器内置识别 ---------------- */
+
+  function startBrowserMode() {
+    if (!getSR()) {
+      showBanner("这个浏览器不支持内置语音识别。去设置里把「语音识别方式」换成服务器端。");
+      return;
+    }
+    running = true;
+    activeMode = "browser";
+    errorStreak = 0;
+    rec = buildRecognition();
+    try {
+      rec.start();
+    } catch (e) {
+      running = false;
+      activeMode = null;
+      setDot("err");
+      showBanner("启动识别失败：" + (e.message || e));
+      return;
+    }
+    markRunning();
     toast("开始听了，把手机放桌上");
   }
 
-  function stopListening() {
-    running = false;
+  function stopBrowserMode() {
     clearTimeout(restartTimer);
     if (rec) {
       try { rec.stop(); } catch (e) {}
       try { rec.abort(); } catch (e) {}
       rec = null;
     }
-    if (wakeLock) {
-      try { wakeLock.release(); } catch (e) {}
-      wakeLock = null;
+  }
+
+  /* ---------------- 方式 B：服务器端识别（录音 → 上传转写） ---------------- */
+
+  var srv = {
+    stream: null,
+    ctx: null,
+    analyser: null,
+    mrec: null,
+    chunks: [],
+    vad: null,
+    timer: 0,
+    chain: Promise.resolve(),
+    mime: "",
+    calibrating: false,
+    samples: [],
+    rmsBuf: null
+  };
+
+  function pickMime() {
+    if (!window.MediaRecorder) return "";
+    var cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
+    for (var i = 0; i < cands.length; i++) {
+      try {
+        if (MediaRecorder.isTypeSupported(cands[i])) return cands[i];
+      } catch (e) {}
     }
-    btnMic.textContent = "开始听";
-    btnMic.classList.remove("on");
-    setDot("");
-    setLive("");
-    liveEl.style.display = "none";
+    return "";
+  }
+
+  function startSegment() {
+    if (!running || !srv.stream) return;
+    srv.chunks = [];
+    try {
+      srv.mrec = srv.mime
+        ? new MediaRecorder(srv.stream, { mimeType: srv.mime })
+        : new MediaRecorder(srv.stream);
+    } catch (e) {
+      showBanner("录音初始化失败：" + (e.message || e));
+      return;
+    }
+    srv.mrec.ondataavailable = function (ev) {
+      if (ev.data && ev.data.size) srv.chunks.push(ev.data);
+    };
+    srv.mrec.onstop = function () {
+      var blob = new Blob(srv.chunks, { type: srv.mime || "audio/webm" });
+      srv.chunks = [];
+      if (blob.size > 2000) sendSegment(blob);
+      if (running) startSegment();
+    };
+    try {
+      srv.mrec.start();
+    } catch (e) {
+      showBanner("开始录音失败：" + (e.message || e));
+    }
+  }
+
+  function cutSegment() {
+    if (srv.vad) srv.vad.reset();
+    if (srv.mrec && srv.mrec.state === "recording") {
+      try { srv.mrec.stop(); } catch (e) {}
+    }
+  }
+
+  function sendSegment(blob) {
+    setLive("识别中…");
+    var cfg = {
+      apiKey: S.asrKey,
+      provider: S.asrProvider || "groq",
+      baseUrl: S.asrBaseUrl || "",
+      model: S.asrModel || "",
+      language: S.lang || "de-DE"
+    };
+    srv.chain = srv.chain.then(function () {
+      return window.KH_ASR.transcribe(blob, cfg).then(
+        function (text) {
+          setLive("");
+          if (text) enqueue(text, false);
+        },
+        function (e) {
+          setLive("");
+          showBanner("转写失败：" + friendlyError(e));
+        }
+      );
+    });
+  }
+
+  function tickServer() {
+    if (!srv.analyser) return;
+    if (!srv.rmsBuf || srv.rmsBuf.length !== srv.analyser.fftSize) {
+      srv.rmsBuf = new Uint8Array(srv.analyser.fftSize);
+    }
+    srv.analyser.getByteTimeDomainData(srv.rmsBuf);
+
+    var sum = 0;
+    for (var i = 0; i < srv.rmsBuf.length; i++) {
+      var v = (srv.rmsBuf[i] - 128) / 128;
+      sum += v * v;
+    }
+    var rms = Math.sqrt(sum / srv.rmsBuf.length);
+
+    // 前 1.2 秒先测环境噪音，自动定阈值
+    if (srv.calibrating) {
+      srv.samples.push(rms);
+      if (srv.samples.length >= 12) {
+        var sorted = srv.samples.slice().sort(function (a, b) { return a - b; });
+        var med = sorted[Math.floor(sorted.length / 2)];
+        srv.vad.setThreshold(Math.min(0.06, Math.max(0.008, med * 3)));
+        srv.calibrating = false;
+        setLive("");
+      }
+      return;
+    }
+
+    var r = srv.vad.feed(rms, performance.now());
+    if (r.started) setLive("●");
+    if (r.cut) cutSegment();
+  }
+
+  async function startServerMode() {
+    if (!S.asrKey) {
+      toast("服务器端识别要先填语音识别 Key");
+      openSheet();
+      return;
+    }
+    if (!window.MediaRecorder) {
+      showBanner("这个浏览器不支持录音，请用 Chrome");
+      return;
+    }
+
+    running = true;
+    activeMode = "server";
+    markRunning();
+    setDot("on");
+    setLive("先安静 1 秒，校准环境噪音…");
+
+    try {
+      srv.stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        }
+      });
+    } catch (e) {
+      running = false;
+      activeMode = null;
+      unmarkRunning();
+      setDot("err");
+      showBanner("麦克风打不开（" + (e.name || e) + "）。检查浏览器麦克风权限。");
+      return;
+    }
+
+    var AC = window.AudioContext || window.webkitAudioContext;
+    srv.ctx = new AC();
+    var src = srv.ctx.createMediaStreamSource(srv.stream);
+    srv.analyser = srv.ctx.createAnalyser();
+    srv.analyser.fftSize = 1024;
+    src.connect(srv.analyser);
+
+    srv.vad = KH.createVad({});
+    srv.samples = [];
+    srv.calibrating = true;
+    srv.rmsBuf = null;
+    srv.mime = pickMime();
+    srv.chunks = [];
+
+    startSegment();
+    srv.timer = setInterval(tickServer, 100);
+    toast("开始听了（服务器端识别）");
+  }
+
+  function stopServerMode() {
+    clearInterval(srv.timer);
+    srv.timer = 0;
+    if (srv.mrec) {
+      srv.mrec.onstop = null;
+      try { srv.mrec.stop(); } catch (e) {}
+      srv.mrec = null;
+    }
+    if (srv.analyser) {
+      try { srv.analyser.disconnect(); } catch (e) {}
+      srv.analyser = null;
+    }
+    if (srv.ctx) {
+      try { srv.ctx.close(); } catch (e) {}
+      srv.ctx = null;
+    }
+    if (srv.stream) {
+      srv.stream.getTracks().forEach(function (t) { t.stop(); });
+      srv.stream = null;
+    }
+    srv.vad = null;
+    srv.chunks = [];
+  }
+
+  /* ---------------- 统一停止 ---------------- */
+
+  function stopListening() {
+    running = false;
+    if (activeMode === "server") stopServerMode();
+    else stopBrowserMode();
+    activeMode = null;
+    unmarkRunning();
   }
 
   document.addEventListener("visibilitychange", function () {
@@ -599,7 +823,9 @@
     fModel: "model",
     fLang: "lang",
     fCourse: "course",
-    fName: "myName"
+    fName: "myName",
+    fAsrMode: "asrMode",
+    fAsrKey: "asrKey"
   };
 
   var CHECKS = { fAuto: "autoAnswer", fVibrate: "vibrate", fTts: "tts" };
