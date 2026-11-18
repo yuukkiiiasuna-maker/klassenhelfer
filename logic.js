@@ -218,6 +218,85 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 2.5 语音活动检测（把连续录音切成一句一句）                          */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * 服务器端识别的核心：麦克风一直在录，靠能量判断"这段话说完了"，
+   * 一说完就切一段音频发走。不依赖任何浏览器语音服务。
+   *
+   * @param {{threshold?:number, silenceMs?:number, minSpeechMs?:number, maxMs?:number}} [options]
+   */
+  function createVad(options) {
+    options = options || {};
+    var threshold = options.threshold || 0.012;
+    var silenceMs = options.silenceMs || 700;
+    var minSpeechMs = options.minSpeechMs || 350;
+    var maxMs = options.maxMs || 15000;
+
+    var active = false;
+    var voiceFrames = 0;
+    var startTs = 0;
+    var lastVoiceTs = 0;
+
+    return {
+      setThreshold: function (v) {
+        threshold = v;
+      },
+      getThreshold: function () {
+        return threshold;
+      },
+      isActive: function () {
+        return active;
+      },
+      reset: function () {
+        active = false;
+        voiceFrames = 0;
+      },
+      /**
+       * @param {number} rms 当前帧的能量（0~1）
+       * @param {number} now 时间戳（毫秒）
+       */
+      feed: function (rms, now) {
+        now = now == null ? Date.now() : now;
+        var out = { started: false, cut: false, durationMs: 0 };
+
+        if (!active) {
+          if (rms > threshold) {
+            voiceFrames++;
+            // 连续两帧过阈值才算"开口"，避免爆音误触发
+            if (voiceFrames >= 2) {
+              active = true;
+              startTs = now - 250; // 往前留 250ms，别吃掉第一个音
+              lastVoiceTs = now;
+              out.started = true;
+            }
+          } else {
+            voiceFrames = 0;
+          }
+          return out;
+        }
+
+        if (rms > threshold) lastVoiceTs = now;
+
+        var dur = now - startTs;
+        if (dur > maxMs) {
+          out.cut = true;
+        } else if (now - lastVoiceTs > silenceMs && lastVoiceTs - startTs > minSpeechMs) {
+          out.cut = true;
+        }
+
+        if (out.cut) {
+          out.durationMs = dur;
+          active = false;
+          voiceFrames = 0;
+        }
+        return out;
+      }
+    };
+  }
+
+  /* ------------------------------------------------------------------ */
   /* 3. 提示词                                                           */
   /* ------------------------------------------------------------------ */
 
@@ -289,6 +368,7 @@
     normalize: normalize,
     detectQuestion: detectQuestion,
     createParser: createParser,
+    createVad: createVad,
     isQuestionAnswer: isQuestionAnswer,
     buildMessages: buildMessages
   };
