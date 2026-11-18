@@ -825,6 +825,7 @@
     fCourse: "course",
     fName: "myName",
     fAsrMode: "asrMode",
+    fAsrProvider: "asrProvider",
     fAsrKey: "asrKey"
   };
 
