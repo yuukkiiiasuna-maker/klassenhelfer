@@ -986,7 +986,61 @@
 
   /* ---------------- 启动 ---------------- */
 
+  /**
+   * 支持一次性配置链接（扫码用）：
+   *   #k=<Key>&asr=deepgram
+   * 导入后立即从地址栏抹掉，避免 Key 留在历史记录里。
+   */
+  function applyHashConfig() {
+    var h = location.hash.replace(/^#/, "");
+    if (!h) return false;
+
+    var params = {};
+    h.split("&").forEach(function (kv) {
+      var i = kv.indexOf("=");
+      if (i > 0) {
+        params[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1));
+      }
+    });
+
+    var changed = false;
+    if (params.k) {
+      S.asrKey = params.k;
+      changed = true;
+    }
+    if (params.asr) {
+      S.asrProvider = params.asr;
+      changed = true;
+    }
+    if (params.mode) {
+      S.asrMode = params.mode;
+      changed = true;
+    } else if (params.k) {
+      S.asrMode = "server";
+    }
+    if (params.dsk) {
+      S.apiKey = params.dsk;
+      changed = true;
+    }
+
+    if (changed) {
+      saveSettings();
+      try {
+        history.replaceState(null, "", location.pathname + location.search);
+      } catch (e) {}
+      return true;
+    }
+    return false;
+  }
+
+  var importedConfig = applyHashConfig();
   applySettingsToUI();
+  if (importedConfig) {
+    setTimeout(function () {
+      syncForm();
+      toast("已导入语音识别配置 ✓");
+    }, 300);
+  }
 
   // 临时探针：?metrics 输出布局尺寸，用于排查横向溢出
   if (/metrics/.test(location.search)) {
