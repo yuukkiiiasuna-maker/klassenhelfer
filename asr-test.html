@@ -46,9 +46,17 @@
 <h1>转写测试</h1>
 <div class="sub">录 4 秒德语 → 发到 Groq 转写。这是服务器端识别的完整链路，测通了主应用就能用。</div>
 
-<label for="key">Groq API Key</label>
-<input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_...">
-<div class="tip">console.groq.com 免费注册，API Keys 页面创建。只保存在这台手机上。</div>
+<label for="provider">服务商</label>
+<select id="provider">
+  <option value="groq">Groq · whisper-large-v3-turbo</option>
+  <option value="deepgram">Deepgram · nova-3（送 $200）</option>
+  <option value="siliconflow">SiliconFlow · SenseVoice</option>
+  <option value="openai">OpenAI · whisper-1</option>
+</select>
+
+<label for="key">API Key</label>
+<input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="填选中那家的 Key">
+<div class="tip">Groq: console.groq.com · Deepgram: console.deepgram.com · SiliconFlow: cloud.siliconflow.cn</div>
 
 <label for="lang">语言</label>
 <select id="lang">
@@ -172,7 +180,7 @@
 
       var text = await window.KH_ASR.transcribe(blob, {
         apiKey: key,
-        provider: "groq",
+        provider: document.getElementById("provider").value,
         language: langEl.value === "de" ? "de-DE" : langEl.value === "zh" ? "zh-CN" : "en-US"
       });
 
