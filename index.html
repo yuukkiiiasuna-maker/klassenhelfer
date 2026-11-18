@@ -80,6 +80,21 @@
     </div>
 
     <div class="field">
+      <label for="fAsrMode">语音识别方式</label>
+      <select id="fAsrMode">
+        <option value="browser">浏览器内置（免费，但依赖手机的语音服务）</option>
+        <option value="server">服务器端（推荐，手机只录音）</option>
+      </select>
+      <div class="tip">手机内置识别报 aborted、或者说德语没反应，就换成服务器端 —— 它不依赖手机任何语音功能。</div>
+    </div>
+
+    <div class="field">
+      <label for="fAsrKey">语音识别 Key（服务器端用）</label>
+      <input id="fAsrKey" type="password" placeholder="gsk_..." autocomplete="off" spellcheck="false">
+      <div class="tip">在 console.groq.com 免费注册领取（不用信用卡），用 whisper-large-v3-turbo 转写德语，有免费额度。</div>
+    </div>
+
+    <div class="field">
       <label for="fCourse">课程背景（强烈建议填）</label>
       <textarea id="fCourse" placeholder="例：本科三年级，课程 Betriebswirtschaftslehre II，本周讲 Marketing-Mix（4P）。老师喜欢举德国中型企业的例子。" spellcheck="false"></textarea>
       <div class="tip">填得越具体，翻得越准、答得越像人话。这是效果提升最大的一项。</div>
@@ -119,6 +134,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="logic.js"></script>
+<script src="asr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
