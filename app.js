@@ -887,6 +887,21 @@
     })(cid, CHECKS[cid]);
   }
 
+  // 填了语音识别 Key 就自动切到服务器端，省得手动忘记切
+  (function () {
+    var node = $("fAsrKey");
+    if (!node) return;
+    node.addEventListener("change", function () {
+      if (node.value.trim() && S.asrMode !== "server") {
+        S.asrMode = "server";
+        saveSettings();
+        var sel = $("fAsrMode");
+        if (sel) sel.value = "server";
+        toast("已切换为服务器端识别");
+      }
+    });
+  })();
+
   document.querySelectorAll("[data-close]").forEach(function (n) {
     n.addEventListener("click", closeSheet);
   });
