@@ -89,9 +89,20 @@
     </div>
 
     <div class="field">
+      <label for="fAsrProvider">语音识别服务商</label>
+      <select id="fAsrProvider">
+        <option value="groq">Groq · whisper-large-v3-turbo</option>
+        <option value="deepgram">Deepgram · nova-3</option>
+        <option value="siliconflow">SiliconFlow · SenseVoice</option>
+        <option value="openai">OpenAI · whisper-1</option>
+      </select>
+      <div class="tip">Groq: console.groq.com · Deepgram: console.deepgram.com（送 $200 额度）· SiliconFlow: cloud.siliconflow.cn</div>
+    </div>
+
+    <div class="field">
       <label for="fAsrKey">语音识别 Key（服务器端用）</label>
-      <input id="fAsrKey" type="password" placeholder="gsk_..." autocomplete="off" spellcheck="false">
-      <div class="tip">在 console.groq.com 免费注册领取（不用信用卡），用 whisper-large-v3-turbo 转写德语，有免费额度。</div>
+      <input id="fAsrKey" type="password" placeholder="gsk_... / 各家格式不同" autocomplete="off" spellcheck="false">
+      <div class="tip">填上面选中那家的 Key。填完会自动把「识别方式」切成服务器端。</div>
     </div>
 
     <div class="field">
