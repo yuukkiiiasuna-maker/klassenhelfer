@@ -97,6 +97,25 @@
     dot.className = "dot" + (state ? " " + state : "");
   }
 
+  /* 常驻错误横幅：识别失败时一直挂着，避免 2 秒的提示条被错过 */
+  var banner = document.createElement("div");
+  banner.className = "banner";
+  banner.innerHTML = '<span class="banner-txt"></span><button class="banner-x">×</button>';
+  banner.querySelector(".banner-x").addEventListener("click", function () {
+    banner.classList.remove("show");
+  });
+  document.body.appendChild(banner);
+
+  function showBanner(text) {
+    banner.querySelector(".banner-txt").textContent = text;
+    banner.classList.add("show");
+  }
+
+  function hideBanner() {
+    banner.classList.remove("show");
+  }
+
+
   function nearBottom() {
     return feed.scrollHeight - feed.scrollTop - feed.clientHeight < 140;
   }
@@ -426,6 +445,7 @@
       setDot("on");
       errorStreak = 0;
       setLive("");
+      hideBanner();
     };
 
     r.onresult = function (ev) {
@@ -451,23 +471,32 @@
       var code = ev && ev.error ? ev.error : "unknown";
       if (code === "no-speech" || code === "aborted") return;
       if (code === "not-allowed" || code === "service-not-allowed") {
-        toast("麦克风权限被拒绝，去浏览器设置里允许");
+        showBanner(
+          "麦克风/语音服务被拒绝（" + code + "）。点地址栏左边的锁图标，把「麦克风」改成允许，然后刷新。"
+        );
         stopListening();
         return;
       }
       if (code === "network") {
-        toast("语音识别联网失败，检查网络");
+        showBanner(
+          "语音识别连不上服务器（network）。手机可能缺 Google 语音服务，或者当前网络到不了 Google。" +
+            "先打开 diagnose 或 mic-test 页面确认。"
+        );
         setDot("err");
         return;
       }
+      if (code === "language-not-supported") {
+        showBanner("不支持 " + (S.lang || "") + " 这个语言包。去设置里换一个语言再试。");
+        return;
+      }
       if (code === "audio-capture") {
-        toast("找不到麦克风");
+        showBanner("找不到麦克风（audio-capture）。检查是不是连了蓝牙耳机，或麦克风被别的 App 占用。");
         stopListening();
         return;
       }
+      showBanner("识别出错：" + code);
       errorStreak++;
       if (errorStreak > 4) {
-        toast("识别反复出错，已停止");
         stopListening();
       }
     };
