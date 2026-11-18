@@ -46,6 +46,19 @@
     };
   }
 
+  function mimeOf(blob) {
+    // Chrome 给的是 "audio/webm;codecs=opus"，服务端只认 "audio/webm"
+    return (blob.type || "audio/webm").split(";")[0].trim().toLowerCase();
+  }
+
+  function extOf(mime) {
+    if (mime.indexOf("mp4") >= 0 || mime.indexOf("aac") >= 0) return "mp4";
+    if (mime.indexOf("ogg") >= 0) return "ogg";
+    if (mime.indexOf("wav") >= 0) return "wav";
+    if (mime.indexOf("mpeg") >= 0) return "mp3";
+    return "webm";
+  }
+
   /**
    * 把一段音频转成文字。
    * @param {Blob} blob 音频（webm/opus 或 wav）
@@ -58,6 +71,7 @@
 
     var r = resolve(cfg);
     var lang = (cfg.language || "de-DE").split("-")[0];
+    var mime = mimeOf(blob);
 
     if (r.provider === "deepgram") {
       var dq = "?model=" + encodeURIComponent(r.model) +
@@ -67,7 +81,7 @@
         method: "POST",
         headers: {
           "Authorization": "Token " + cfg.apiKey,
-          "Content-Type": blob.type || "audio/webm"
+          "Content-Type": mime
         },
         body: blob
       });
@@ -80,7 +94,7 @@
 
     // OpenAI 兼容（Groq / SiliconFlow / OpenAI）
     var form = new FormData();
-    form.append("file", blob, "audio.webm");
+    form.append("file", blob, "audio." + extOf(mime));
     form.append("model", r.model);
     form.append("language", lang);
     form.append("response_format", "json");
