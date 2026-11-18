@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d12">
+<title>麦克风诊断 · Klassenhelfer</title>
+<style>
+  :root {
+    --bg:#0a0d12; --card:#151b26; --line:#232c3d; --text:#e8eef7;
+    --dim:#8d9bb0; --dim2:#6b7789; --accent:#4f9cf9; --ok:#38d39f; --bad:#ff6b6b; --warn:#ffb84d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text); font-size:15px; line-height:1.55;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    padding:16px 14px calc(env(safe-area-inset-bottom) + 30px); max-width:640px; margin:0 auto;
+  }
+  h1 { font-size:17px; margin:0 0 4px; }
+  .sub { color:var(--dim2); font-size:12px; margin-bottom:14px; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; }
+  .box h2 { font-size:13px; margin:0 0 8px; color:var(--dim); font-weight:600; letter-spacing:.3px; }
+  .kv { font-size:12px; color:var(--dim); line-height:1.8; word-break:break-all; }
+  .kv b { color:var(--text); font-weight:500; }
+  button {
+    border:none; border-radius:10px; padding:11px 14px; font-size:14px; font-weight:600;
+    font-family:inherit; cursor:pointer; background:var(--accent); color:#06111f; margin:0 8px 8px 0;
+  }
+  button.ghost { background:#1d2533; color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.45; }
+  .meter { display:flex; align-items:flex-end; gap:3px; height:56px; margin:10px 0 6px; }
+  .meter i { flex:1; background:#243045; border-radius:2px; height:4px; transition:height .06s; }
+  .meter i.hot { background:var(--ok); }
+  .db { font-size:12px; color:var(--dim2); font-variant-numeric:tabular-nums; }
+  .log {
+    background:#0e131b; border:1px solid var(--line); border-radius:10px; padding:10px;
+    font-family:ui-monospace,Consolas,monospace; font-size:11.5px; line-height:1.7;
+    white-space:pre-wrap; word-break:break-word; max-height:46vh; overflow-y:auto; color:var(--dim);
+  }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  .hint { font-size:12px; color:var(--dim2); margin-top:8px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<h1>麦克风诊断</h1>
+<div class="sub">分三步定位：麦克风有没有声音、语音识别服务能不能连、德语言包有没有。</div>
+
+<div class="box">
+  <h2>① 环境</h2>
+  <div class="kv" id="env">检查中…</div>
+</div>
+
+<div class="box">
+  <h2>② 麦克风音量</h2>
+  <div class="meter" id="meter"></div>
+  <div class="db" id="db">—</div>
+  <div style="margin-top:10px">
+    <button id="btnMic">开始测麦克风</button>
+    <button id="btnPlay" class="ghost" disabled>回放录音</button>
+  </div>
+  <div class="hint">对着手机说话，绿色条要跟着动。条不动 = 麦克风没收到声音（检查是不是连了蓝牙耳机、静音键、或者被别的 App 占用）。</div>
+</div>
+
+<div class="box">
+  <h2>③ 语音识别</h2>
+  <button id="btnDe">识别（德语 de-DE）</button>
+  <button id="btnEn" class="ghost">识别（英语 en-US 对照）</button>
+  <div class="hint">德语不认、英语能认 = 德语言包/服务问题；两个都不认 = 手机缺 Google 语音服务。</div>
+</div>
+
+<div class="box">
+  <h2>日志</h2>
+  <div class="log" id="log">点上面的按钮开始…</div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var logEl = document.getElementById("log");
+  var lines = [];
+  var t0 = Date.now();
+
+  function log(msg, cls) {
+    var ms = String(Date.now() - t0).padStart(5, "0");
+    var text = "[" + ms + "ms] " + msg;
+    lines.push(cls ? '<span class="' + cls + '">' + text + "</span>" : text);
+    logEl.innerHTML = lines.join("\n");
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  /* ---------------- ① 环境 ---------------- */
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+
+  (async function env() {
+    var rows = [];
+    rows.push("安全上下文: <b>" + (window.isSecureContext ? "是 ✓" : "否 ✗") + "</b>");
+    rows.push("页面地址: <b>" + location.origin + "</b>");
+    rows.push("语音识别 API: <b>" + (SR ? "存在 ✓" : "不存在 ✗") + "</b>");
+    rows.push("getUserMedia: <b>" + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? "有 ✓" : "没有 ✗") + "</b>");
+
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        var p = await navigator.permissions.query({ name: "microphone" });
+        rows.push("麦克风权限: <b>" + p.state + "</b>");
+      } else {
+        rows.push("麦克风权限: <b>该浏览器不支持查询</b>");
+      }
+    } catch (e) {
+      rows.push("麦克风权限: <b>查询失败 (" + e.name + ")</b>");
+    }
+
+    rows.push("浏览器: <b>" + navigator.userAgent.replace(/^.*(Chrome\/[\d.]+).*$/, "$1") + "</b>");
+    document.getElementById("env").innerHTML = rows.join("<br>");
+
+    if (!SR) log("致命：这个浏览器没有 SpeechRecognition，语音识别不可用", "bad");
+    if (!window.isSecureContext) log("致命：不是安全上下文，麦克风会被拒绝", "bad");
+  })();
+
+  /* ---------------- ② 音量表 ---------------- */
+
+  var meter = document.getElementById("meter");
+  var BARS = 24;
+  var bars = [];
+  for (var i = 0; i < BARS; i++) {
+    var b = document.createElement("i");
+    meter.appendChild(b);
+    bars.push(b);
+  }
+
+  var stream = null;
+  var audioCtx = null;
+  var analyser = null;
+  var rafId = 0;
+  var recorder = null;
+  var chunks = [];
+  var lastBlobUrl = null;
+
+  function stopAll() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+    if (recorder && recorder.state !== "inactive") {
+      try { recorder.stop(); } catch (e) {}
+    }
+    if (stream) {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      stream = null;
+    }
+    if (audioCtx) {
+      try { audioCtx.close(); } catch (e) {}
+      audioCtx = null;
+      analyser = null;
+    }
+    bars.forEach(function (b) { b.style.height = "4px"; b.classList.remove("hot"); });
+  }
+
+  async function startMic() {
+    stopAll();
+    var btn = document.getElementById("btnMic");
+    btn.disabled = true;
+    try {
+      log("请求 getUserMedia…");
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        }
+      });
+      var track = stream.getAudioTracks()[0];
+      log("麦克风已打开：" + (track.label || "未知设备"), "ok");
+      log("设置：" + JSON.stringify(track.getSettings ? track.getSettings() : {}));
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var src = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      src.connect(analyser);
+
+      var buf = new Uint8Array(analyser.fftSize);
+      var peak = 0;
+
+      function tick() {
+        analyser.getByteTimeDomainData(buf);
+        var sum = 0;
+        for (var k = 0; k < buf.length; k++) {
+          var v = (buf[k] - 128) / 128;
+          sum += v * v;
+        }
+        var rms = Math.sqrt(sum / buf.length);
+        peak = Math.max(peak, rms);
+
+        var level = Math.min(1, rms * 6);
+        var lit = Math.round(level * BARS);
+        for (var j = 0; j < BARS; j++) {
+          bars[j].style.height = (j < lit ? 6 + (j / BARS) * 50 : 4) + "px";
+          bars[j].classList.toggle("hot", j < lit);
+        }
+        document.getElementById("db").textContent =
+          "电平 " + (rms * 100).toFixed(1) + "  峰值 " + (peak * 100).toFixed(1);
+
+        rafId = requestAnimationFrame(tick);
+      }
+      tick();
+
+      // 同时录一段，方便回放确认是不是录到了声音
+      chunks = [];
+      try {
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = function (e) {
+          if (e.data && e.data.size) chunks.push(e.data);
+        };
+        recorder.onstop = function () {
+          if (!chunks.length) return;
+          var blob = new Blob(chunks, { type: chunks[0].type || "audio/webm" });
+          if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+          lastBlobUrl = URL.createObjectURL(blob);
+          document.getElementById("btnPlay").disabled = false;
+          log("录音完成，共 " + Math.round(blob.size / 1024) + " KB", "ok");
+        };
+        recorder.start();
+        setTimeout(function () {
+          if (recorder && recorder.state === "recording") {
+            try { recorder.stop(); } catch (e) {}
+          }
+          stopAll();
+          btn.disabled = false;
+          log("录音 6 秒结束。峰值 " + (peak * 100).toFixed(1) +
+              (peak < 0.02 ? " —— 几乎没声音，麦克风没收到！" : " —— 有信号 ✓"),
+              peak < 0.02 ? "bad" : "ok");
+        }, 6000);
+      } catch (e) {
+        log("MediaRecorder 不可用：" + e.name, "warn");
+        btn.disabled = false;
+      }
+    } catch (e) {
+      log("getUserMedia 失败：" + e.name + " — " + e.message, "bad");
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById("btnMic").addEventListener("click", startMic);
+  document.getElementById("btnPlay").addEventListener("click", function () {
+    if (lastBlobUrl) new Audio(lastBlobUrl).play();
+  });
+
+  /* ---------------- ③ 语音识别 ---------------- */
+
+  function testRecognition(lang) {
+    if (!SR) {
+      log("没有 SpeechRecognition，跳过", "bad");
+      return;
+    }
+    log("──────── 开始识别测试 lang=" + lang + " ────────");
+    var r;
+    try {
+      r = new SR();
+    } catch (e) {
+      log("构造识别器失败：" + e.name + " " + e.message, "bad");
+      return;
+    }
+
+    r.lang = lang;
+    r.continuous = false;
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+
+    var gotAny = false;
+
+    r.onstart = function () { log("onstart —— 识别器已启动（此时应有麦克风指示灯）", "ok"); };
+    r.onaudiostart = function () { log("onaudiostart —— 开始采集音频", "ok"); };
+    r.onsoundstart = function () { log("onsoundstart —— 检测到声音", "ok"); };
+    r.onspeechstart = function () { log("onspeechstart —— 判定为人声", "ok"); };
+    r.onspeechend = function () { log("onspeechend —— 人声结束"); };
+    r.onsoundend = function () { log("onsoundend —— 声音结束"); };
+    r.onaudioend = function () { log("onaudioend —— 音频采集结束"); };
+
+    r.onresult = function (ev) {
+      gotAny = true;
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        var t = ev.results[i][0].transcript;
+        log((ev.results[i].isFinal ? "最终结果: " : "临时结果: ") + t,
+            ev.results[i].isFinal ? "ok" : "");
+      }
+    };
+
+    r.onerror = function (ev) {
+      var code = ev.error || "unknown";
+      var tip = "";
+      if (code === "network") tip = " —— 连不上 Google 语音服务（国内网络/无 GMS 常见）";
+      if (code === "not-allowed") tip = " —— 麦克风或语音服务被拒绝";
+      if (code === "service-not-allowed") tip = " —— 浏览器禁用语音服务（缺 Google App）";
+      if (code === "language-not-supported") tip = " —— 不支持 " + lang + " 语言包";
+      if (code === "audio-capture") tip = " —— 采集不到音频设备";
+      log("onerror: " + code + tip, "bad");
+    };
+
+    r.onend = function () {
+      log("onend" + (gotAny ? " —— 有结果" : " —— 全程没有任何结果"),
+          gotAny ? "ok" : "bad");
+    };
+
+    try {
+      r.start();
+      log("已调用 start()，说一句话试试…");
+      setTimeout(function () { try { r.stop(); } catch (e) {} }, 9000);
+    } catch (e) {
+      log("start() 抛错：" + e.name + " " + e.message, "bad");
+    }
+  }
+
+  document.getElementById("btnDe").addEventListener("click", function () { testRecognition("de-DE"); });
+  document.getElementById("btnEn").addEventListener("click", function () { testRecognition("en-US"); });
+})();
+</script>
+</body>
+</html>
