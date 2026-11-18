@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d12">
+<title>诊断 · Klassenhelfer</title>
+<style>
+  :root {
+    --bg: #0a0d12; --card: #151b26; --line: #232c3d; --text: #e8eef7;
+    --dim: #8d9bb0; --dim2: #6b7789; --accent: #4f9cf9; --ok: #38d39f; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 16px 14px calc(env(safe-area-inset-bottom) + 24px); max-width: 640px;
+  }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  .sub { color: var(--dim2); font-size: 12px; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 5px; }
+  input {
+    width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--text); font-size: 14px; padding: 10px 11px; outline: none; font-family: inherit;
+  }
+  input:focus { border-color: var(--accent); }
+  .tip { font-size: 11px; color: var(--dim2); margin-top: 4px; }
+  button {
+    width: 100%; margin-top: 16px; border: none; border-radius: 12px; padding: 13px;
+    font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
+    background: linear-gradient(180deg, #6fb0ff, var(--accent)); color: #06111f;
+  }
+  button:disabled { opacity: 0.5; }
+  pre {
+    margin-top: 16px; background: #0e131b; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--dim);
+  }
+  .ok { color: var(--ok); }
+  .bad { color: var(--bad); }
+  .warn { color: #ffb84d; }
+</style>
+</head>
+<body>
+
+<h1>连接诊断</h1>
+<div class="sub">检查这台手机能不能直连模型接口：跨域、鉴权、流式，三件事分开测。</div>
+
+<label for="key">API Key</label>
+<input id="key" type="password" autocomplete="off" spellcheck="false" value="sk-this-key-is-invalid-on-purpose">
+<div class="tip">先保持这个假 Key 点一次，看到「通道正常」就说明网络和跨域没问题；再换成你的真 Key 重测。</div>
+
+<label for="base">接口地址</label>
+<input id="base" type="url" spellcheck="false" value="https://api.deepseek.com">
+
+<label for="model">模型</label>
+<input id="model" type="text" spellcheck="false" value="deepseek-chat">
+
+<button id="run">开始诊断</button>
+<pre id="out">等你点上面的按钮…</pre>
+
+<script>
+(function () {
+  "use strict";
+
+  var out = document.getElementById("out");
+  var run = document.getElementById("run");
+  var lines = [];
+
+  function line(text, cls) {
+    lines.push(cls ? '<span class="' + cls + '">' + text + "</span>" : text);
+    out.innerHTML = lines.join("\n");
+  }
+
+  function endpoint() {
+    return document.getElementById("base").value.trim().replace(/\/+$/, "") + "/chat/completions";
+  }
+
+  function headers() {
+    return {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + document.getElementById("key").value.trim()
+    };
+  }
+
+  function model() {
+    return document.getElementById("model").value.trim() || "deepseek-chat";
+  }
+
+  function verdict(status) {
+    if (status === 401) return "Key 无效（用的还是假 Key 的话，这是正常结果）";
+    if (status === 402) return "Key 有效，但余额不足";
+    if (status === 429) return "Key 有效，但被限流了";
+    if (status === 200) return "全部正常";
+    return "返回了状态码 " + status;
+  }
+
+  async function testBasic() {
+    var t0 = performance.now();
+    var res = await fetch(endpoint(), {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        model: model(),
+        messages: [{ role: "user", content: "只回复两个字母：ok" }],
+        max_tokens: 8,
+        stream: false
+      })
+    });
+    var body = await res.text();
+    var ms = Math.round(performance.now() - t0);
+    line("① 基础请求：" + res.status + "（" + ms + "ms）", res.status === 200 ? "ok" : "warn");
+    line("   " + res.type + " · " + body.slice(0, 150).replace(/\s+/g, " "));
+    return res.status;
+  }
+
+  async function testStream() {
+    var t0 = performance.now();
+    var tFirst = 0;
+    var res = await fetch(endpoint(), {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        model: model(),
+        messages: [{ role: "user", content: "用一句德语介绍你自己。" }],
+        max_tokens: 60,
+        stream: true
+      })
+    });
+
+    if (!res.ok) {
+      var txt = await res.text();
+      line("② 流式请求失败：" + res.status + " " + txt.slice(0, 130), "bad");
+      return;
+    }
+
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = "";
+    var text = "";
+    var chunks = 0;
+    var deadline = performance.now() + 15000;
+
+    while (true) {
+      if (performance.now() > deadline) {
+        line("   流式读取超时（15 秒），服务端没正常结束", "warn");
+        try { reader.cancel(); } catch (e) {}
+        break;
+      }
+      var r = await reader.read();
+      if (r.done) break;
+      buf += decoder.decode(r.value, { stream: true });
+      var parts = buf.split("\n");
+      buf = parts.pop();
+      for (var i = 0; i < parts.length; i++) {
+        var l = parts[i].trim();
+        if (l.indexOf("data:") !== 0) continue;
+        var p = l.slice(5).trim();
+        if (p === "[DONE]") continue;
+        var j;
+        try { j = JSON.parse(p); } catch (e) { continue; }
+        var d = j.choices && j.choices[0] && j.choices[0].delta;
+        if (d && d.content) {
+          if (!tFirst) {
+            tFirst = Math.round(performance.now() - t0);
+            line("② 流式请求：首字 " + tFirst + "ms", "ok");
+          }
+          text += d.content;
+          chunks++;
+        }
+      }
+      if (text.length > 100) break;
+    }
+
+    line("   收到 " + chunks + " 个增量，内容：" + text.slice(0, 80).replace(/\s+/g, " "));
+    if (tFirst && tFirst > 3000) line("   首字超过 3 秒，上课时会明显觉得卡", "warn");
+  }
+
+  async function runAll() {
+    lines = [];
+    out.textContent = "…";
+    run.disabled = true;
+
+    var status = 0;
+    try {
+      status = await testBasic();
+    } catch (e) {
+      line("① 基础请求直接抛错：" + e.name + " " + e.message, "bad");
+      line("   → 跨域被拦或断网，跟 Key 无关", "bad");
+      line("");
+      line("结论：通道不通", "bad");
+      run.disabled = false;
+      return;
+    }
+
+    try {
+      await testStream();
+    } catch (e) {
+      line("② 流式请求抛错：" + e.name + " " + e.message, "bad");
+    }
+
+    line("");
+    line("结论：" + verdict(status), status === 200 || status === 401 ? "ok" : "warn");
+    if (status === 401) {
+      line("换成真 Key 再点一次，看到「结论：全部正常」就能回主界面用了。", "warn");
+    }
+    run.disabled = false;
+  }
+
+  run.addEventListener("click", runAll);
+
+  // 方便测试：?base=... 覆盖接口地址，?auto 自动开跑
+  (function () {
+    var m = /[?&]base=([^&]+)/.exec(location.search);
+    if (m) document.getElementById("base").value = decodeURIComponent(m[1]);
+    if (/[?&]auto\b/.test(location.search)) setTimeout(runAll, 120);
+  })();
+})();
+</script>
+</body>
+</html>
