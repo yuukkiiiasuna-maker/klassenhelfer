@@ -183,7 +183,7 @@
     if (data.A) {
       zh.classList.remove("cursor");
       ansRow.hidden = false;
-      ans.textContent = data.A;
+      ans.textContent = KH.sanitizeGermanAnswer(data.A);
       ans.classList.add("cursor");
     }
     if (data.H) {
@@ -385,14 +385,14 @@
         if (S.vibrate && navigator.vibrate) {
           try { navigator.vibrate([0, 90, 70, 90]); } catch (e) {}
         }
-        if (S.tts && parser.data.A) speak(parser.data.A);
+        if (S.tts && parser.data.A) speak(KH.sanitizeGermanAnswer(parser.data.A));
         if (S.autoAnswer) scrollBottom();
       } else if (stick) {
         scrollBottom();
       }
 
       // 给朗读/复制按钮挂上内容
-      var ansText = parser.data.A || "";
+      var ansText = KH.sanitizeGermanAnswer(parser.data.A || "");
       var zhText = parser.data.T || "";
       card.querySelector(".act-speak").addEventListener("click", function () {
         speak(ansText);
