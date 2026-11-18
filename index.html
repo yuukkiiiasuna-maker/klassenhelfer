@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0a0d12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>课堂助手 · Klassenhelfer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <span class="dot" id="dot"></span>
+  <div class="brand">
+    <h1>课堂助手</h1>
+    <span class="sub" id="langLabel">DE → 中文</span>
+  </div>
+  <button class="icon-btn" id="btnDiscreet" title="低调模式">👁</button>
+  <button class="icon-btn" id="btnSettings" title="设置">⚙</button>
+</header>
+
+<main id="feed">
+  <div class="empty" id="empty">
+    <div class="big">🎧</div>
+    <div>点下面的按钮开始听。</div>
+    <div style="margin-top:10px">
+      老师说的话会实时翻译成中文，<br>一旦他提问，直接给你一段能念的德语回答。
+    </div>
+    <div style="margin-top:16px;font-size:12px">
+      第一次用先去 <code>⚙ 设置</code> 填 API Key 和课程信息
+    </div>
+  </div>
+</main>
+
+<footer>
+  <button class="btn-main" id="btnMic">开始听</button>
+  <button class="btn-alt" id="btnAnswer" disabled>这是提问，答</button>
+</footer>
+
+<!-- 设置 -->
+<div class="sheet" id="sheet">
+  <div class="mask" data-close></div>
+  <div class="panel">
+    <h2>设置 <button data-close>完成</button></h2>
+
+    <div class="field">
+      <label for="fKey">DeepSeek API Key</label>
+      <input id="fKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
+      <div class="tip">只存在这台手机的浏览器里，不会上传到别处。Key 在 platform.deepseek.com 创建。</div>
+    </div>
+
+    <div class="field">
+      <label for="fBase">接口地址</label>
+      <input id="fBase" type="url" placeholder="https://api.deepseek.com" spellcheck="false">
+      <div class="tip">用别的 OpenAI 兼容服务就换成它的地址，例如 https://api.openai.com/v1</div>
+    </div>
+
+    <div class="field">
+      <label for="fModel">模型</label>
+      <input id="fModel" type="text" placeholder="deepseek-chat" spellcheck="false">
+      <div class="tip">deepseek-chat 最快最便宜，够用。deepseek-reasoner 更聪明但慢一倍。</div>
+    </div>
+
+    <div class="field">
+      <label for="fLang">老师说的语言</label>
+      <select id="fLang">
+        <option value="de-DE">德语（Deutsch）</option>
+        <option value="en-US">英语（English）</option>
+        <option value="fr-FR">法语（Français）</option>
+        <option value="es-ES">西班牙语（Español）</option>
+        <option value="ja-JP">日语（日本語）</option>
+        <option value="ko-KR">韩语（한국어）</option>
+        <option value="zh-CN">中文（普通话）</option>
+      </select>
+      <div class="tip">语音识别按这个语言来认。选错了会一个字都认不出来。</div>
+    </div>
+
+    <div class="field">
+      <label for="fCourse">课程背景（强烈建议填）</label>
+      <textarea id="fCourse" placeholder="例：本科三年级，课程 Betriebswirtschaftslehre II，本周讲 Marketing-Mix（4P）。老师喜欢举德国中型企业的例子。" spellcheck="false"></textarea>
+      <div class="tip">填得越具体，翻得越准、答得越像人话。这是效果提升最大的一项。</div>
+    </div>
+
+    <div class="field">
+      <label for="fName">我的名字（老师点名用）</label>
+      <input id="fName" type="text" placeholder="例：Yu" spellcheck="false">
+      <div class="tip">填了之后，老师叫到你名字时会特别标注并优先作答。</div>
+    </div>
+
+    <div class="switch">
+      <span>自动答题</span>
+      <input type="checkbox" id="fAuto">
+    </div>
+    <div class="switch">
+      <span>答案是提问时震动提醒</span>
+      <input type="checkbox" id="fVibrate">
+    </div>
+    <div class="switch">
+      <span>自动朗读德语答案（耳机）</span>
+      <input type="checkbox" id="fTts">
+    </div>
+
+    <div class="test-row">
+      <button class="mini" id="btnTest">测试连接</button>
+      <span class="test-out" id="testOut"></span>
+    </div>
+
+    <div class="tip" style="margin-top:18px;line-height:1.7">
+      课堂录音只在这台手机上做识别，不会存到任何服务器；
+      只有识别出的文字会发给你配置的模型接口。
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
