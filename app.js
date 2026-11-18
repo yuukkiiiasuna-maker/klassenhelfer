@@ -1104,22 +1104,22 @@
 
   // 预览模式：?demo  直接看界面长什么样，不连模型
   if (/[?&#]demo\b/.test(location.search + location.hash)) {
-    var demo1 = makeCard("Was ist der Unterschied zwischen Aktiva und Passiva in der Bilanz");
+    var demo1 = makeCard("Was ist der Unterschied zwischen aktiven und passiven Bauteilen");
     renderCard(demo1, {
       Q: "yes",
-      T: "资产负债表里的资产和负债有什么区别？",
-      A: "Aktiva zeigen, was das Unternehmen besitzt, also Maschinen, Lager und Forderungen. Passiva zeigen, woher das Geld kommt, also Eigenkapital und Schulden. Beide Seiten sind immer gleich hoch.",
-      H: "考点是 Bilanzgleichung：资产 = 负债 + 权益。被追问就补一句「Die Bilanz ist immer ausgeglichen」。"
+      T: "有源器件和无源器件有什么区别？",
+      A: "Aktive Bauteile können das Signal verstärken oder erzeugen. Passive Bauteile können das Signal nur weitergeben oder abschwächen. Sie brauchen dafür keine zusätzliche Energie.",
+      H: "考点是能量的来源：有源器件（晶体管、运放）需要电源才能放大；无源器件（电阻、电容、电感）只改变信号，不提供能量。被追问可以补 Widerstand 或 Kondensator 的例子。"
     });
     demo1.classList.remove("pending");
     demo1.classList.add("isq");
     demo1.querySelectorAll(".cursor").forEach(function (n) { n.classList.remove("cursor"); });
     insertCard(demo1);
 
-    var demo2 = makeCard("Wir schauen uns jetzt die Umsatzentwicklung der letzten drei Jahre an");
+    var demo2 = makeCard("Wir schauen uns jetzt den Stromkreis mit einem Kondensator an");
     renderCard(demo2, {
       Q: "no",
-      T: "我们现在看一下过去三年的营业额变化。",
+      T: "我们现在看一下带电容的电路。",
       A: "",
       H: ""
     });
