@@ -66,7 +66,9 @@
   <h2>③ 语音识别</h2>
   <button id="btnDe">识别（德语 de-DE）</button>
   <button id="btnEn" class="ghost">识别（英语 en-US 对照）</button>
-  <div class="hint">德语不认、英语能认 = 德语言包/服务问题；两个都不认 = 手机缺 Google 语音服务。</div>
+  <button id="btnHold" class="ghost">先开麦克风再识别</button>
+  <div class="hint">德语不认、英语能认 = 德语言包/服务问题；两个都不认 = 手机缺 Google 语音服务。
+  第三个按钮是排查用的：先占住一路麦克风，看识别服务是不是「抢不到麦克风」才被中止的。</div>
 </div>
 
 <div class="box">
@@ -269,10 +271,12 @@
     r.maxAlternatives = 1;
 
     var gotAny = false;
+    var sawAudio = false;
+    var sawSound = false;
 
     r.onstart = function () { log("onstart —— 识别器已启动（此时应有麦克风指示灯）", "ok"); };
-    r.onaudiostart = function () { log("onaudiostart —— 开始采集音频", "ok"); };
-    r.onsoundstart = function () { log("onsoundstart —— 检测到声音", "ok"); };
+    r.onaudiostart = function () { sawAudio = true; log("onaudiostart —— 开始采集音频", "ok"); };
+    r.onsoundstart = function () { sawSound = true; log("onsoundstart —— 检测到声音", "ok"); };
     r.onspeechstart = function () { log("onspeechstart —— 判定为人声", "ok"); };
     r.onspeechend = function () { log("onspeechend —— 人声结束"); };
     r.onsoundend = function () { log("onsoundend —— 声音结束"); };
@@ -301,6 +305,12 @@
     r.onend = function () {
       log("onend" + (gotAny ? " —— 有结果" : " —— 全程没有任何结果"),
           gotAny ? "ok" : "bad");
+      if (!sawAudio) {
+        log("⚠ onaudiostart 从未触发：识别器从头到尾没拿到音频。", "bad");
+        log("   → 这是根因，不是权限弹窗的问题。多半是手机的「Google / 语音服务」被禁用了麦克风权限，或者根本没有这个服务。", "bad");
+      } else if (!sawSound) {
+        log("⚠ 拿到了音频但没检测到声音：麦克风静音、或说的是空白。", "warn");
+      }
     };
 
     try {
@@ -314,6 +324,22 @@
 
   document.getElementById("btnDe").addEventListener("click", function () { testRecognition("de-DE"); });
   document.getElementById("btnEn").addEventListener("click", function () { testRecognition("en-US"); });
+
+  document.getElementById("btnHold").addEventListener("click", async function () {
+    try {
+      var s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      window.__holdStream = s; // 保持引用，别被回收
+      log("已保持一路麦克风流（测试识别服务是不是抢不到麦克风）", "ok");
+      setTimeout(function () { testRecognition("de-DE"); }, 400);
+      setTimeout(function () {
+        s.getTracks().forEach(function (t) { t.stop(); });
+        window.__holdStream = null;
+        log("已释放保持的麦克风流");
+      }, 14000);
+    } catch (e) {
+      log("保持麦克风流失败：" + e.name, "bad");
+    }
+  });
 })();
 </script>
 </body>
