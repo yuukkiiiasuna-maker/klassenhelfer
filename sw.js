@@ -1,5 +1,5 @@
 ﻿/* 绂荤嚎澹崇紦瀛橈細鏁欏 Wi-Fi 鐑傜殑鏃跺€欒嚦灏戣兘鎶婄晫闈㈡墦寮€ */
-const CACHE = "klassenhelfer-v7";
+const CACHE = "klassenhelfer-v8";
 const SHELL = ["./", "./index.html", "./app.js", "./logic.js", "./asr.js", "./styles.css", "./manifest.webmanifest"];
 
 self.addEventListener("install", (ev) => {
@@ -47,6 +47,7 @@ self.addEventListener("fetch", (ev) => {
     })
   );
 });
+
 
 
 
