@@ -69,7 +69,7 @@ python -m http.server 8321
 
 | 项 | 怎么填 | 为什么重要 |
 |---|---|---|
-| **课程背景** | 年级 + 课程名 + 本周主题 + 老师习惯。例：`本科三年级，Betriebswirtschaftslehre II，本周讲 Marketing-Mix（4P）。老师爱举德国中型企业的例子。` | 决定翻译准确率和答案是否像人话，**这一项收益最大** |
+| **课程背景** | 年级 + 课程名 + 本周主题 + 老师习惯。例：`本科一年级，大学物理，本周讲 Elektrizitätslehre：aktive und passive Bauteile、Widerstand、Kondensator。老师爱让学生举例子。` | 决定翻译准确率和答案是否像人话，**这一项收益最大**。德语里 `aktiv/passiv` 在物理和会计里是同一个词，填了科目模型才不会选错义项 |
 | **我的名字** | 老师点你名时用的叫法，如 `Yu` | 老师喊你会特别标注、优先作答 |
 
 其余：
